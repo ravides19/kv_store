@@ -105,10 +105,38 @@ defmodule KVStore.Config do
   end
 
   @doc """
-  Get server port.
+  Get server port with dynamic assignment for cluster mode.
+
+  When clustering is enabled and running on a single machine:
+  - node1 uses port 8080
+  - node2 uses port 8081
+  - node3 uses port 8082
+  - etc.
+
+  When clustering is disabled, uses the default port (8080).
   """
   def server_port do
-    get_env_int("KV_PORT", @default_port)
+    cluster_config = cluster_config()
+
+    if cluster_config[:enabled] do
+      # Get the node ID and find its position in the cluster nodes list
+      node_id = cluster_config[:node_id]
+      cluster_nodes = cluster_config[:cluster_nodes]
+
+      case Enum.find_index(cluster_nodes, &(&1 == node_id)) do
+        nil ->
+          # Node not found in cluster, use default port
+          get_env_int("KV_PORT", @default_port)
+
+        index ->
+          # Calculate port based on node position: 8080 + index
+          base_port = get_env_int("KV_PORT", @default_port)
+          base_port + index
+      end
+    else
+      # Clustering disabled, use default port
+      get_env_int("KV_PORT", @default_port)
+    end
   end
 
   @doc """
@@ -116,6 +144,41 @@ defmodule KVStore.Config do
   """
   def server_host do
     get_env("KV_HOST", @default_host)
+  end
+
+  @doc """
+  Get binary server port with dynamic assignment for cluster mode.
+
+  When clustering is enabled and running on a single machine:
+  - node1 uses port 9090
+  - node2 uses port 9091
+  - node3 uses port 9092
+  - etc.
+
+  When clustering is disabled, uses the default port (9090).
+  """
+  def binary_server_port do
+    cluster_config = cluster_config()
+
+    if cluster_config[:enabled] do
+      # Get the node ID and find its position in the cluster nodes list
+      node_id = cluster_config[:node_id]
+      cluster_nodes = cluster_config[:cluster_nodes]
+
+      case Enum.find_index(cluster_nodes, &(&1 == node_id)) do
+        nil ->
+          # Node not found in cluster, use default binary port
+          get_env_int("KV_BINARY_PORT", 9090)
+
+        index ->
+          # Calculate binary port based on node position: 9090 + index
+          base_binary_port = get_env_int("KV_BINARY_PORT", 9090)
+          base_binary_port + index
+      end
+    else
+      # Clustering disabled, use default binary port
+      get_env_int("KV_BINARY_PORT", 9090)
+    end
   end
 
   @doc """

@@ -194,7 +194,8 @@ export KV_CACHE_MAX_SIZE="10000"             # Max cache entries (default: 10000
 export KV_CACHE_TTL_MS="300000"              # Cache TTL in ms (default: 5min)
 export KV_COMPRESSION_ALGORITHM="lz4"        # Compression: lz4, gzip, none (default: lz4)
 export KV_COMPRESSION_LEVEL="6"              # Compression level 1-9 (default: 6)
-export KV_PORT="8080"                        # Network port (default: 8080)
+export KV_PORT="8080"                        # HTTP server port (default: 8080)
+export KV_BINARY_PORT="9090"                 # Binary server port (default: 9090)
 export KV_HOST="127.0.0.1"                   # Network host (default: 127.0.0.1)
 
 # Cluster configuration
@@ -204,6 +205,29 @@ export KV_CLUSTER_NODES="node1,node2,node3"  # Cluster nodes (default: node1,nod
 export KV_RAFT_ELECTION_TIMEOUT_MS="150"     # Raft election timeout (default: 150ms)
 export KV_RAFT_HEARTBEAT_INTERVAL_MS="50"    # Raft heartbeat interval (default: 50ms)
 ```
+
+### Dynamic Port Assignment
+
+When clustering is enabled, KVStore automatically assigns different ports to each node to avoid conflicts on a single machine:
+
+**Single Node (Clustering Disabled):**
+- HTTP Server: Port 8080
+- Binary Server: Port 9090
+
+**Multi-Node Cluster (Clustering Enabled):**
+- **node1**: HTTP Port 8080, Binary Port 9090
+- **node2**: HTTP Port 8081, Binary Port 9091  
+- **node3**: HTTP Port 8082, Binary Port 9092
+- **node4**: HTTP Port 8083, Binary Port 9093
+- etc.
+
+**Custom Base Ports:**
+If you set `KV_PORT=9000` and `KV_BINARY_PORT=9500`, the assignment becomes:
+- **node1**: HTTP Port 9000, Binary Port 9500
+- **node2**: HTTP Port 9001, Binary Port 9501
+- **node3**: HTTP Port 9002, Binary Port 9502
+
+This automatic port assignment eliminates the need to manually configure different ports for each node when running a cluster on a single machine.
 
 ### API Usage (Fully Functional)
 
@@ -765,6 +789,28 @@ KVStore.start()
 
 ### Multi-Node Cluster
 
+#### **Single Machine Setup (Recommended for Development)**
+```bash
+# Terminal 1 - Node 1 (HTTP: 8080, Binary: 9090)
+export KV_CLUSTER_ENABLED="true"
+export KV_NODE_ID="node1"
+export KV_CLUSTER_NODES="node1,node2,node3"
+iex -S mix
+
+# Terminal 2 - Node 2 (HTTP: 8081, Binary: 9091)
+export KV_CLUSTER_ENABLED="true"
+export KV_NODE_ID="node2"
+export KV_CLUSTER_NODES="node1,node2,node3"
+iex -S mix
+
+# Terminal 3 - Node 3 (HTTP: 8082, Binary: 9092)
+export KV_CLUSTER_ENABLED="true"
+export KV_NODE_ID="node3"
+export KV_CLUSTER_NODES="node1,node2,node3"
+iex -S mix
+```
+
+#### **Programmatic Setup**
 ```elixir
 # Enable clustering via environment variables
 System.put_env("KV_CLUSTER_ENABLED", "true")
@@ -786,10 +832,18 @@ leader = KVStore.get_leader()
 ### Cluster-Aware Client
 
 ```elixir
-# Create cluster client
+# Create cluster client with dynamic ports
 client = KVStore.ClusterClient.new(
-  nodes: ["node1:8080", "node2:8080", "node3:8080"],
+  nodes: ["node1:8080", "node2:8081", "node3:8082"],  # Use dynamic HTTP ports
   protocol: :http,
+  timeout_ms: 5000,
+  retry_attempts: 3
+)
+
+# Or for binary protocol
+client = KVStore.ClusterClient.new(
+  nodes: ["node1:9090", "node2:9091", "node3:9092"],  # Use dynamic binary ports
+  protocol: :binary,
   timeout_ms: 5000,
   retry_attempts: 3
 )
@@ -817,11 +871,11 @@ client = KVStore.ClusterClient.new(
 
 ### 🔧 **Known Issues & Next Steps**
 
-#### **1. Multi-Node Testing Port Conflicts**
+#### **1. Multi-Node Testing Port Conflicts** ✅ **RESOLVED**
 - **Issue**: HTTP/Binary servers use fixed ports (8080, 8081), causing `:eaddrinuse` errors in multi-node tests
 - **Impact**: Prevents proper multi-node Raft testing
-- **Solution**: Implement incremental port assignment (8080, 8081, 8082, 8083, etc.) for each node
-- **Status**: Identified and ready for implementation
+- **Solution**: ✅ **Implemented dynamic port assignment** (8080, 8081, 8082, 8083, etc.) for each node
+- **Status**: ✅ **COMPLETED** - Dynamic port assignment now automatically assigns different ports to each node
 
 #### **2. Global Process Registration Warnings**
 - **Issue**: Type checking warnings for `:global` registration in Raft inter-node communication
@@ -829,16 +883,16 @@ client = KVStore.ClusterClient.new(
 - **Solution**: Improve type specifications for global process registration
 - **Status**: Low priority, cosmetic issue
 
-#### **3. Multi-Node Raft Testing**
+#### **3. Multi-Node Raft Testing** 🔧 **READY FOR IMPLEMENTATION**
 - **Issue**: Current tests converted to single-node due to port conflicts
 - **Impact**: Limited multi-node validation
-- **Solution**: Implement proper multi-node test environment with separate port spaces
-- **Status**: Ready for implementation once port conflicts resolved
+- **Solution**: ✅ **Port conflicts resolved** - Now ready to implement proper multi-node test environment
+- **Status**: 🔧 **Ready for implementation** - Dynamic port assignment enables proper multi-node testing
 
 ### 🎯 **Immediate Next Steps**
-1. **Implement incremental port assignment** for multi-node testing
-2. **Restore full multi-node Raft tests** with proper node isolation
-3. **Add comprehensive multi-node integration tests**
+1. ✅ **Dynamic port assignment implemented** for multi-node testing
+2. **Restore full multi-node Raft tests** with proper node isolation (now possible)
+3. **Add comprehensive multi-node integration tests** using dynamic ports
 4. **Performance testing** for cluster operations
 5. **Production deployment testing** with multiple nodes
 
@@ -1040,7 +1094,7 @@ From our testing:
 6. ✅ Cluster-aware client with failover
 7. ✅ Comprehensive test coverage (single-node)
 8. ✅ Binary server compilation warnings fixed
-9. 🔧 Multi-node testing with incremental ports (ready for implementation)
+9. ✅ Dynamic port assignment for multi-node testing (COMPLETED)
 
 ## References
 

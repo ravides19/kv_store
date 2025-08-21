@@ -32,12 +32,12 @@ defmodule KVStore.BinaryServer do
     }
   end
 
-  # Use next port for binary protocol
-  @port KVStore.Config.server_port() + 1
-
   def start_link(opts \\ []) do
-    port = Keyword.get(opts, :port, @port)
-    GenServer.start_link(__MODULE__, port, name: __MODULE__)
+    # Calculate binary server port dynamically
+    # Binary server uses its own port range (9090, 9091, 9092, etc.)
+    binary_port = Keyword.get(opts, :port, KVStore.Config.binary_server_port())
+
+    GenServer.start_link(__MODULE__, binary_port, name: __MODULE__)
   end
 
   @impl true
@@ -331,6 +331,6 @@ defmodule KVStore.BinaryServer do
   Get the port the binary server is running on.
   """
   def port do
-    @port
+    KVStore.Config.binary_server_port()
   end
 end
