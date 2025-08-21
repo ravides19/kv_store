@@ -8,8 +8,8 @@ defmodule KVStore.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      # Starts a worker by calling: KVStore.Worker.start_link(arg)
-      # {KVStore.Worker, arg}
+      # Storage engine supervisor - main component for the KV store
+      KVStore.Storage.Supervisor
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

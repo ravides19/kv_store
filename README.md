@@ -57,6 +57,135 @@ Create a Github repository and commit your work, Within the repository provide d
 
 Share a link to the Github repo.
 
+# Phase 0 - Implementation Status
+
+Phase 0 has been implemented with the following components:
+
+## ✅ Completed Features
+
+- **OTP Application Structure**: Full supervision tree with proper process management
+- **Storage Engine**: Basic GenServer with ETS-based index structure
+- **File Cache**: LRU cache for managing open file handles
+- **Compactor**: Background compaction process structure
+- **Configuration Management**: Centralized config with environment variable support
+- **Release Script**: Simple script for running the application
+- **Basic API**: Main KVStore module with placeholder operations
+
+## 🏗️ Architecture Overview
+
+```
+KVStore.Application
+└── KVStore.Supervisor
+    └── KVStore.Storage.Supervisor
+        ├── KVStore.Storage.Engine (GenServer)
+        ├── KVStore.Storage.FileCache (GenServer)
+        └── KVStore.Storage.Compactor (GenServer)
+```
+
+## 🚀 How to Run
+
+### Prerequisites
+- Elixir 1.18 or later
+- Erlang/OTP
+
+### Quick Start
+
+1. **Clone and setup**:
+   ```bash
+   git clone <your-repo>
+   cd kv_store
+   mix deps.get
+   ```
+
+2. **Run tests**:
+   ```bash
+   mix test
+   ```
+
+3. **Start the application**:
+   ```bash
+   # Using the release script
+   ./rel/kv start
+   
+   # Or using mix
+   mix run --no-halt
+   ```
+
+4. **Interactive console**:
+   ```bash
+   # Using the release script
+   ./rel/kv console
+   
+   # Or using mix
+   iex -S mix
+   ```
+
+### Configuration
+
+Environment variables for configuration:
+
+```bash
+export KV_DATA_DIR="data"                    # Data directory (default: data)
+export KV_SEGMENT_MAX_BYTES="104857600"      # Segment size in bytes (default: 100MB)
+export KV_SYNC_ON_PUT="false"                # Sync on every put (default: false)
+export KV_MAX_FILES="10"                     # Max open files in cache (default: 10)
+export KV_MERGE_TRIGGER_RATIO="0.3"          # Merge trigger ratio (default: 0.3)
+export KV_MERGE_THROTTLE_MS="10"             # Merge throttle in ms (default: 10)
+export KV_PORT="8080"                        # Network port (default: 8080)
+export KV_HOST="127.0.0.1"                   # Network host (default: 127.0.0.1)
+```
+
+### API Usage (Phase 0 - Structure Only)
+
+```elixir
+# Start the application
+KVStore.start()
+
+# Check status
+KVStore.status()
+
+# Operations (return :not_implemented_yet in Phase 0)
+KVStore.put("key", "value")
+KVStore.get("key")
+KVStore.delete("key")
+KVStore.range("start", "end")
+KVStore.batch_put([{"key1", "value1"}, {"key2", "value2"}])
+
+# Stop the application
+KVStore.stop()
+```
+
+## 📋 Next Steps (Phase 1)
+
+The next phase will implement:
+- On-disk data format (append-only log)
+- Record format with headers and checksums
+- Segment layout and rotation
+- Low-level I/O operations
+
+## 🔧 Development
+
+### Project Structure
+```
+kv_store/
+├── lib/kv_store/
+│   ├── application.ex          # OTP application
+│   ├── config.ex              # Configuration management
+│   └── storage/
+│       ├── supervisor.ex       # Storage supervision tree
+│       ├── engine.ex          # Main storage engine
+│       ├── file_cache.ex      # File handle cache
+│       └── compactor.ex       # Background compaction
+├── rel/kv                     # Release script
+├── test/                      # Tests
+└── mix.exs                    # Project configuration
+```
+
+### Running Tests
+```bash
+mix test
+```
+
 # References
 
 1. https://static.googleusercontent.com/media/research.google.com/en//archive/bigtable-osdi06.pdf
@@ -93,7 +222,7 @@ Awesome problem. Here’s a pragmatic, Bitcask-style plan to build a **network-a
    * I/O via `:file` (`open`, `write`, `pread`, `sync`), sockets via `:gen_tcp` (or `:inets` httpd if you want HTTP), ETS for the index.
 2. **Repo skeleton**
 
-   * `apps/kv/` (OTP app): storage engine, index, compactor, network server.
+   * `kv_store` (OTP app): storage engine, index, compactor, network server.
    * `rel/` for a simple release script; `README.md` with run instructions & protocol.
 
 ## Phase 1 — On-disk data format (append-only)

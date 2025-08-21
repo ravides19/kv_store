@@ -1,0 +1,99 @@
+#!/bin/bash
+
+# KVStore Release Script
+# Simple script to run the KV store application
+
+set -e
+
+# Default values
+DATA_DIR=${KV_DATA_DIR:-"data"}
+PORT=${KV_PORT:-8080}
+HOST=${KV_HOST:-"127.0.0.1"}
+
+# Function to show usage
+show_usage() {
+    echo "Usage: $0 {start|stop|restart|status|console}"
+    echo ""
+    echo "Commands:"
+    echo "  start     - Start the KV store application"
+    echo "  stop      - Stop the KV store application"
+    echo "  restart   - Restart the KV store application"
+    echo "  status    - Show application status"
+    echo "  console   - Start an interactive Elixir console"
+    echo ""
+    echo "Environment variables:"
+    echo "  KV_DATA_DIR - Data directory (default: data)"
+    echo "  KV_PORT     - Network port (default: 8080)"
+    echo "  KV_HOST     - Network host (default: 127.0.0.1)"
+    echo ""
+}
+
+# Function to start the application
+start_app() {
+    echo "Starting KVStore..."
+    echo "Data directory: $DATA_DIR"
+    echo "Network: $HOST:$PORT"
+    
+    # Ensure data directory exists
+    mkdir -p "$DATA_DIR"
+    
+    # Start the application
+    elixir --erl "-kernel inet_dist_listen_min 9000" --erl "-kernel inet_dist_listen_max 9100" -S mix run --no-halt
+}
+
+# Function to stop the application
+stop_app() {
+    echo "Stopping KVStore..."
+    # This is a simple implementation - in a real release you'd use proper process management
+    pkill -f "elixir.*mix run" || true
+}
+
+# Function to show status
+show_status() {
+    echo "KVStore Status:"
+    echo "Data directory: $DATA_DIR"
+    echo "Network: $HOST:$PORT"
+    
+    if pgrep -f "elixir.*mix run" > /dev/null; then
+        echo "Status: Running"
+    else
+        echo "Status: Stopped"
+    fi
+}
+
+# Function to start console
+start_console() {
+    echo "Starting KVStore console..."
+    echo "Data directory: $DATA_DIR"
+    
+    # Ensure data directory exists
+    mkdir -p "$DATA_DIR"
+    
+    # Start interactive console
+    iex --erl "-kernel inet_dist_listen_min 9000" --erl "-kernel inet_dist_listen_max 9100" -S mix
+}
+
+# Main script logic
+case "$1" in
+    start)
+        start_app
+        ;;
+    stop)
+        stop_app
+        ;;
+    restart)
+        stop_app
+        sleep 2
+        start_app
+        ;;
+    status)
+        show_status
+        ;;
+    console)
+        start_console
+        ;;
+    *)
+        show_usage
+        exit 1
+        ;;
+esac
