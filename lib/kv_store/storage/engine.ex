@@ -135,6 +135,9 @@ defmodule KVStore.Storage.Engine do
 
         :ets.insert(state.key_set, {key, true})
 
+        # Update cache with new value
+        KVStore.Storage.Cache.put(key, value)
+
         # Sync if configured
         if state.sync_on_put do
           KVStore.Storage.Segment.sync(state.active_file)
@@ -149,22 +152,32 @@ defmodule KVStore.Storage.Engine do
 
   @impl true
   def handle_call({:get, key}, _from, state) do
-    case :ets.lookup(state.keydir, key) do
-      [] ->
-        {:reply, {:error, :not_found}, state}
+    # First, try to get from cache
+    case KVStore.Storage.Cache.get(key) do
+      {:ok, cached_value} ->
+        {:reply, {:ok, cached_value}, state}
 
-      [{^key, segment_id, offset, _size, _timestamp, is_tombstone}] ->
-        if is_tombstone do
-          {:reply, {:error, :not_found}, state}
-        else
-          # Read from the appropriate segment
-          case read_from_segment(segment_id, offset, state) do
-            {:ok, value} ->
-              {:reply, {:ok, value}, state}
+      {:error, :not_found} ->
+        # Cache miss, read from storage
+        case :ets.lookup(state.keydir, key) do
+          [] ->
+            {:reply, {:error, :not_found}, state}
 
-            {:error, reason} ->
-              {:reply, {:error, reason}, state}
-          end
+          [{^key, segment_id, offset, _size, _timestamp, is_tombstone}] ->
+            if is_tombstone do
+              {:reply, {:error, :not_found}, state}
+            else
+              # Read from the appropriate segment
+              case read_from_segment(segment_id, offset, state) do
+                {:ok, value} ->
+                  # Cache the value for future reads
+                  KVStore.Storage.Cache.put(key, value)
+                  {:reply, {:ok, value}, state}
+
+                {:error, reason} ->
+                  {:reply, {:error, reason}, state}
+              end
+            end
         end
     end
   end
@@ -188,6 +201,9 @@ defmodule KVStore.Storage.Engine do
         )
 
         :ets.delete(state.key_set, key)
+
+        # Invalidate cache entry
+        KVStore.Storage.Cache.delete(key)
 
         # Sync if configured
         if state.sync_on_put do
@@ -233,25 +249,48 @@ defmodule KVStore.Storage.Engine do
 
   @impl true
   def handle_call({:batch_put, kv_pairs}, _from, state) do
-    # For now, implement batch put as individual puts for correctness
-    # TODO: Optimize this to write as a single batch later
-    results =
-      Enum.reduce_while(kv_pairs, {state, []}, fn {key, value}, {current_state, acc} ->
-        case handle_call({:put, key, value}, self(), current_state) do
-          {:reply, {:ok, offset}, new_state} ->
-            {:cont, {new_state, [offset | acc]}}
+    # Optimized batch put: write all records atomically
+    {batch_iodata, _batch_binary, new_state} = build_batch_data(kv_pairs, state)
 
-          {:reply, {:error, reason}, _new_state} ->
-            {:halt, {:error, reason}}
+    # Write all records atomically as single operation
+    case :file.write(new_state.active_file, batch_iodata) do
+      :ok ->
+        # Calculate offsets and update ETS for all records
+        {final_state, offsets} =
+          Enum.reduce(kv_pairs, {new_state, []}, fn {key, value}, {current_state, offset_acc} ->
+            record_size = IO.iodata_length(KVStore.Storage.Record.create(key, value))
+            new_offset = current_state.active_offset + record_size
+
+            # Update keydir
+            :ets.insert(current_state.keydir, {
+              key,
+              current_state.active_segment_id,
+              current_state.active_offset,
+              # Subtract header size
+              record_size - 30,
+              :os.system_time(:millisecond),
+              false
+            })
+
+            # Update key_set for range queries
+            :ets.insert(current_state.key_set, {key, true})
+
+            # Update cache with new value
+            KVStore.Storage.Cache.put(key, value)
+
+            new_state = %{current_state | active_offset: new_offset}
+            {new_state, [current_state.active_offset | offset_acc]}
+          end)
+
+        # Single sync for entire batch
+        if final_state.sync_on_put do
+          :file.sync(final_state.active_file)
         end
-      end)
 
-    case results do
+        {:reply, {:ok, List.first(offsets)}, final_state}
+
       {:error, reason} ->
         {:reply, {:error, reason}, state}
-
-      {final_state, offsets} ->
-        {:reply, {:ok, List.first(offsets)}, final_state}
     end
   end
 
@@ -409,8 +448,7 @@ defmodule KVStore.Storage.Engine do
   end
 
   defp build_batch_data(kv_pairs, state) do
-    # For now, we'll write records sequentially
-    # In a more optimized version, we could write them as a single batch
+    # Optimized batch writing: build single iodata for atomic write
     {batch_data, new_state} =
       Enum.reduce(kv_pairs, {[], state}, fn {key, value}, {acc, current_state} ->
         # Check if we need to rotate for each record
@@ -420,9 +458,14 @@ defmodule KVStore.Storage.Engine do
         {[record_data | acc], current_state}
       end)
 
-    # Combine all record data
-    combined_data = Enum.reverse(batch_data)
-    {combined_data, [], new_state}
+    # Combine all record data into single iodata for efficient writing
+    # The records are already in the correct order (first to last)
+    batch_iodata = Enum.reverse(batch_data)
+
+    # Convert to binary for size calculation
+    batch_binary = IO.iodata_to_binary(batch_iodata)
+
+    {batch_iodata, batch_binary, new_state}
   end
 
   defp get_keys_in_range(key_set, start_key, end_key) do

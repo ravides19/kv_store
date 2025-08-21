@@ -9,7 +9,11 @@ defmodule KVStore.Application do
   def start(_type, _args) do
     children = [
       # Storage engine supervisor - main component for the KV store
-      KVStore.Storage.Supervisor
+      KVStore.Storage.Supervisor,
+      # HTTP server for network access
+      {KVStore.Server, []},
+      # Binary server for high-performance access
+      {KVStore.BinaryServer, []}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

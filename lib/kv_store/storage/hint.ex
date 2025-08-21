@@ -195,6 +195,9 @@ defmodule KVStore.Storage.Hint do
       {:ok, header} ->
         {:error, {:incomplete_header, byte_size(header)}}
 
+      {:error, :eof} ->
+        {:error, :empty_file}
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -231,12 +234,18 @@ defmodule KVStore.Storage.Hint do
           {:ok, key_binary} ->
             {:error, {:incomplete_key, byte_size(key_binary), key_len}}
 
+          {:error, :eof} ->
+            {:error, :unexpected_eof}
+
           {:error, reason} ->
             {:error, reason}
         end
 
       {:ok, fixed_part} ->
         {:error, {:incomplete_entry, byte_size(fixed_part)}}
+
+      {:error, :eof} ->
+        {:error, :unexpected_eof}
 
       {:error, reason} ->
         {:error, reason}

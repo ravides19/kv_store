@@ -95,7 +95,7 @@ defmodule KVStore.Storage.WALTest do
     KVStore.Storage.WAL.close(wal4)
 
     # Replay the WAL
-    entries = []
+    _entries = []
 
     {:ok, result} =
       KVStore.Storage.WAL.replay(wal.path, fn entry ->

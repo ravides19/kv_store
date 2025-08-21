@@ -66,6 +66,28 @@ defmodule KVStore.Config do
   end
 
   @doc """
+  Get cache configuration.
+  """
+  def cache_config do
+    [
+      max_entries: get_env_int("KV_CACHE_MAX_ENTRIES", 1000),
+      max_memory_mb: get_env_int("KV_CACHE_MAX_MEMORY_MB", 100),
+      ttl_seconds: get_env_int("KV_CACHE_TTL_SECONDS", 300)
+    ]
+  end
+
+  @doc """
+  Get compression configuration.
+  """
+  def compression_config do
+    [
+      algorithm: get_env_atom("KV_COMPRESSION_ALGORITHM", :lz4),
+      level: get_env_int("KV_COMPRESSION_LEVEL", 1),
+      min_size: get_env_int("KV_COMPRESSION_MIN_SIZE", 1024)
+    ]
+  end
+
+  @doc """
   Get network configuration.
   """
   def network_config do
@@ -73,6 +95,20 @@ defmodule KVStore.Config do
       port: get_env_int("KV_PORT", @default_port),
       host: get_env("KV_HOST", @default_host)
     ]
+  end
+
+  @doc """
+  Get server port.
+  """
+  def server_port do
+    get_env_int("KV_PORT", @default_port)
+  end
+
+  @doc """
+  Get server host.
+  """
+  def server_host do
+    get_env("KV_HOST", @default_host)
   end
 
   # Private helper functions

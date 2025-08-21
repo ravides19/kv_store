@@ -351,6 +351,10 @@ defmodule KVStore.Storage.Recovery do
 
         {:ok, %{entries: entries_count, tombstones: tombstones_count}}
 
+      {:error, :empty_file} ->
+        # Empty hint file, return zero stats
+        {:ok, %{entries: 0, tombstones: 0}}
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -461,10 +465,16 @@ defmodule KVStore.Storage.Recovery do
         try do
           result = verify_all_records(file, 0, %{valid: 0, invalid: 0})
           :file.close(file)
-          {:ok, result}
+
+          if result.invalid > 0 do
+            {:error, {:invalid_records, result.invalid}}
+          else
+            {:ok, result}
+          end
         catch
           kind, error ->
             :file.close(file)
+            Logger.error("Error verifying segment #{segment.id}: #{inspect({kind, error})}")
             {:error, {kind, error}}
         end
 
@@ -474,23 +484,37 @@ defmodule KVStore.Storage.Recovery do
   end
 
   defp verify_all_records(file, offset, stats) do
-    case KVStore.Storage.Record.read(file, offset) do
-      {:ok, record} ->
-        case validate_record_integrity(record) do
-          :ok ->
-            new_stats = %{stats | valid: stats.valid + 1}
-            verify_all_records(file, offset + record.total_size, new_stats)
+    try do
+      case KVStore.Storage.Record.read(file, offset) do
+        {:ok, record} ->
+          case validate_record_integrity(record) do
+            :ok ->
+              new_stats = %{stats | valid: stats.valid + 1}
+              verify_all_records(file, offset + record.total_size, new_stats)
 
-          {:error, _reason} ->
-            new_stats = %{stats | invalid: stats.invalid + 1}
-            verify_all_records(file, offset + record.total_size, new_stats)
+            {:error, _reason} ->
+              # If we can't validate the record, stop verification
+              %{stats | invalid: stats.invalid + 1}
+          end
+
+        {:error, :eof} ->
+          stats
+
+        {:error, _reason} ->
+          # Return stats with invalid count incremented instead of continuing
+          %{stats | invalid: stats.invalid + 1}
+      end
+    rescue
+      error ->
+        case error do
+          %CaseClauseError{term: :eof} ->
+            # :eof is a normal condition when reaching end of file
+            stats
+
+          _ ->
+            Logger.error("Exception in verify_all_records: #{inspect(error)}")
+            %{stats | invalid: stats.invalid + 1}
         end
-
-      {:error, :eof} ->
-        stats
-
-      {:error, _reason} ->
-        %{stats | invalid: stats.invalid + 1}
     end
   end
 end

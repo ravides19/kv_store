@@ -3,8 +3,34 @@ defmodule KVStoreTest do
   doctest KVStore
 
   setup do
+    # Stop any existing application first
+    try do
+      Application.stop(:kv_store)
+    catch
+      :exit, _ -> :ok
+    end
+
+    # Wait for processes to stop and files to be closed
+    Process.sleep(100)
+
+    # Clean up any existing data
+    File.rm_rf!("data")
+
     # Start the application for each test
     KVStore.start()
+
+    on_exit(fn ->
+      try do
+        Application.stop(:kv_store)
+      catch
+        :exit, _ -> :ok
+      end
+
+      # Wait and clean up again
+      Process.sleep(50)
+      File.rm_rf!("data")
+    end)
+
     :ok
   end
 

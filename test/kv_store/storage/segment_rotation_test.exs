@@ -136,7 +136,7 @@ defmodule KVStore.Storage.SegmentRotationTest do
     KVStore.Storage.Engine.put("rotation_key", large_value)
 
     # Check status
-    status = KVStore.Storage.Engine.status()
+    _status = KVStore.Storage.Engine.status()
 
     # Wait a bit for hint file creation
     :timer.sleep(100)
@@ -205,7 +205,7 @@ defmodule KVStore.Storage.SegmentRotationTest do
     assert status.keydir_size == length(test_data)
     assert status.key_set_size == length(test_data)
 
-    KVStore.Storage.Engine.stop()
+    GenServer.stop(KVStore.Storage.Engine, :normal)
   end
 
   test "deletes and tombstones across segments", %{test_dir: test_dir} do
@@ -290,7 +290,7 @@ defmodule KVStore.Storage.SegmentRotationTest do
 
       current_status = KVStore.Storage.Engine.status()
 
-      if current_status.active_segment_id > segment_id_before do
+      if current_status.active_segment_id > segment_id_before and not rotated do
         rotated = true
       end
     end)
