@@ -32,7 +32,8 @@ defmodule KVStoreTest do
     assert status.data_dir == "data"
     assert status.segment_max_bytes == 100 * 1024 * 1024
     assert status.sync_on_put == true
-    assert status.active_segment_id == 1
+    # active_segment_id may be > 1 if there are existing segments
+    assert status.active_segment_id >= 1
     # active_offset may be > 0 if data has been written
     assert status.active_offset >= 0
     # keydir_size and key_set_size may be > 0 if data has been written

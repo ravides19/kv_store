@@ -16,7 +16,17 @@ defmodule KVStore.Storage.Segment do
   def open_active(data_dir, segment_id) do
     segment_path = Path.join(data_dir, "#{segment_id}.data")
 
-    case :file.open(segment_path, [:raw, :binary, :append, :delayed_write]) do
+    # Ensure the file exists by creating it first if needed
+    case :file.open(segment_path, [:raw, :binary, :write]) do
+      {:ok, temp_file} ->
+        :file.close(temp_file)
+
+      {:error, _} ->
+        # File might already exist, which is fine
+        :ok
+    end
+
+    case :file.open(segment_path, [:raw, :binary, :append]) do
       {:ok, file} ->
         Logger.info("Opened active segment #{segment_id} at #{segment_path}")
         {:ok, file, segment_path}

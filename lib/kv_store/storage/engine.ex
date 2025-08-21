@@ -83,6 +83,12 @@ defmodule KVStore.Storage.Engine do
     key_set =
       :ets.new(:key_set, [:ordered_set, :public, read_concurrency: true, write_concurrency: true])
 
+    # Load existing data from hint files and segments
+    {keydir, key_set} = load_existing_data(data_dir, keydir, key_set)
+
+    # Find the next segment ID
+    active_segment_id = find_next_segment_id(data_dir)
+
     # Initialize state
     state = %{
       data_dir: data_dir,
@@ -90,7 +96,7 @@ defmodule KVStore.Storage.Engine do
       sync_on_put: sync_on_put,
       keydir: keydir,
       key_set: key_set,
-      active_segment_id: 1,
+      active_segment_id: active_segment_id,
       active_file: nil,
       active_offset: 0
     }
@@ -257,11 +263,22 @@ defmodule KVStore.Storage.Engine do
     {:reply, status, state}
   end
 
+  @impl true
+  def terminate(_reason, state) do
+    # Create hint file for the active segment before shutting down
+    create_hint_for_segment(state)
+    Logger.info("KVStore storage engine shutting down")
+    :ok
+  end
+
   # Private functions
 
   defp maybe_rotate_segment(state) do
     case KVStore.Storage.Segment.get_size(state.active_file) do
       {:ok, size} when size >= state.segment_max_bytes ->
+        # Create hint file for the current segment before closing
+        create_hint_for_segment(state)
+
         # Close current segment
         KVStore.Storage.Segment.close_segment(
           state.active_file,
@@ -382,11 +399,84 @@ defmodule KVStore.Storage.Engine do
     end
   end
 
-  defp open_active_segment(state) do
-    segment_path = Path.join(state.data_dir, "#{state.active_segment_id}.data")
+  defp create_hint_for_segment(state) do
+    # Get all keydir entries for the current segment
+    keydir_entries =
+      :ets.match_object(state.keydir, {:_, state.active_segment_id, :"$1", :"$2", :"$3", :"$4"})
+      |> Enum.map(fn {key, segment_id, offset, size, timestamp, is_tombstone} ->
+        {key, segment_id, offset, size, timestamp, is_tombstone}
+      end)
 
-    case :file.open(segment_path, [:raw, :binary, :append, :delayed_write]) do
-      {:ok, file} ->
+    # Create hint file
+    case KVStore.Storage.Hint.create_hint(state.active_segment_id, state.data_dir, keydir_entries) do
+      {:ok, _hint_path} ->
+        Logger.info(
+          "Created hint file for segment #{state.active_segment_id} with #{length(keydir_entries)} entries"
+        )
+
+        :ok
+
+      {:error, reason} ->
+        Logger.error(
+          "Failed to create hint file for segment #{state.active_segment_id}: #{inspect(reason)}"
+        )
+
+        :error
+    end
+  end
+
+  defp load_existing_data(data_dir, keydir, key_set) do
+    # First, try to load from hint files for fast startup
+    case KVStore.Storage.Hint.list_hints(data_dir) do
+      {:ok, hint_segments} ->
+        Logger.info("Found #{length(hint_segments)} hint files, loading index...")
+
+        Enum.each(hint_segments, fn segment_id ->
+          case KVStore.Storage.Hint.read_hint(segment_id, data_dir) do
+            {:ok, entries} ->
+              Enum.each(entries, fn {key, segment_id, offset, size, timestamp, is_tombstone} ->
+                :ets.insert(keydir, {key, segment_id, offset, size, timestamp, is_tombstone})
+
+                if not is_tombstone do
+                  :ets.insert(key_set, {key, true})
+                end
+              end)
+
+              Logger.info(
+                "Loaded #{length(entries)} entries from hint file for segment #{segment_id}"
+              )
+
+            {:error, reason} ->
+              Logger.warning(
+                "Failed to read hint file for segment #{segment_id}: #{inspect(reason)}"
+              )
+          end
+        end)
+
+      {:error, reason} ->
+        Logger.warning("Failed to list hint files: #{inspect(reason)}")
+    end
+
+    {keydir, key_set}
+  end
+
+  defp find_next_segment_id(data_dir) do
+    case KVStore.Storage.Segment.list_segments(data_dir) do
+      {:ok, segments} ->
+        if segments == [] do
+          1
+        else
+          Enum.max(segments) + 1
+        end
+
+      {:error, _reason} ->
+        1
+    end
+  end
+
+  defp open_active_segment(state) do
+    case KVStore.Storage.Segment.open_active(state.data_dir, state.active_segment_id) do
+      {:ok, file, _path} ->
         %{state | active_file: file}
 
       {:error, reason} ->
