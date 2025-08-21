@@ -10,7 +10,7 @@ defmodule KVStore.Config do
   @default_data_dir "data"
   # 100MB
   @default_segment_max_bytes 100 * 1024 * 1024
-  @default_sync_on_put false
+  @default_sync_on_put true
 
   # File cache configuration
   @default_max_files 10

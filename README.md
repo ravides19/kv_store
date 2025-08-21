@@ -57,19 +57,22 @@ Create a Github repository and commit your work, Within the repository provide d
 
 Share a link to the Github repo.
 
-# Phase 0 - Implementation Status
+# Phase 1 - Implementation Status
 
-Phase 0 has been implemented with the following components:
+Phase 1 has been implemented with the following components:
 
 ## ✅ Completed Features
 
 - **OTP Application Structure**: Full supervision tree with proper process management
-- **Storage Engine**: Basic GenServer with ETS-based index structure
+- **Storage Engine**: Complete GenServer with ETS-based index and working operations
 - **File Cache**: LRU cache for managing open file handles
-- **Compactor**: Background compaction process structure
+- **Background Compaction**: Background compaction process structure
 - **Configuration Management**: Centralized config with environment variable support
 - **Release Script**: Simple script for running the application
-- **Basic API**: Main KVStore module with placeholder operations
+- **On-Disk Data Format**: Complete record format with headers, checksums, and proper serialization
+- **Low-Level I/O**: Working file operations with proper error handling
+- **Segment Management**: Active segment rotation and file handle management
+- **Working API**: All basic operations (put, get, delete, range, batch_put) are functional
 
 ## 🏗️ Architecture Overview
 
@@ -135,7 +138,7 @@ export KV_PORT="8080"                        # Network port (default: 8080)
 export KV_HOST="127.0.0.1"                   # Network host (default: 127.0.0.1)
 ```
 
-### API Usage (Phase 0 - Structure Only)
+### API Usage (Phase 1 - Fully Functional)
 
 ```elixir
 # Start the application
@@ -144,24 +147,29 @@ KVStore.start()
 # Check status
 KVStore.status()
 
-# Operations (return :not_implemented_yet in Phase 0)
-KVStore.put("key", "value")
-KVStore.get("key")
-KVStore.delete("key")
-KVStore.range("start", "end")
-KVStore.batch_put([{"key1", "value1"}, {"key2", "value2"}])
+# Basic operations (all working)
+{:ok, offset} = KVStore.put("key", "value")
+{:ok, "value"} = KVStore.get("key")
+{:ok, offset} = KVStore.delete("key")
+{:error, :not_found} = KVStore.get("key")  # After deletion
+
+# Range operations
+{:ok, [{"key1", "value1"}, {"key2", "value2"}]} = KVStore.range("key1", "key2")
+
+# Batch operations
+{:ok, offset} = KVStore.batch_put([{"key1", "value1"}, {"key2", "value2"}])
 
 # Stop the application
 KVStore.stop()
 ```
 
-## 📋 Next Steps (Phase 1)
+## 📋 Next Steps (Phase 2)
 
 The next phase will implement:
-- On-disk data format (append-only log)
-- Record format with headers and checksums
-- Segment layout and rotation
-- Low-level I/O operations
+- Hint files for fast startup
+- Background compaction and merging
+- Crash recovery and durability improvements
+- Performance optimizations
 
 ## 🔧 Development
 
