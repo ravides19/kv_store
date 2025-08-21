@@ -45,44 +45,90 @@ defmodule KVStore do
   Put a key-value pair into the store.
   """
   def put(key, value) do
-    KVStore.Storage.Engine.put(key, value)
+    if KVStore.Config.cluster_config()[:enabled] do
+      KVStore.Storage.ReplicatedEngine.put(key, value)
+    else
+      KVStore.Storage.Engine.put(key, value)
+    end
   end
 
   @doc """
   Get a value by key.
   """
   def get(key) do
-    KVStore.Storage.Engine.get(key)
+    if KVStore.Config.cluster_config()[:enabled] do
+      KVStore.Storage.ReplicatedEngine.get(key)
+    else
+      KVStore.Storage.Engine.get(key)
+    end
   end
 
   @doc """
   Delete a key from the store.
   """
   def delete(key) do
-    KVStore.Storage.Engine.delete(key)
+    if KVStore.Config.cluster_config()[:enabled] do
+      KVStore.Storage.ReplicatedEngine.delete(key)
+    else
+      KVStore.Storage.Engine.delete(key)
+    end
   end
 
   @doc """
   Get a range of keys.
   """
   def range(start_key, end_key) do
-    KVStore.Storage.Engine.range(start_key, end_key)
+    if KVStore.Config.cluster_config()[:enabled] do
+      KVStore.Storage.ReplicatedEngine.range(start_key, end_key)
+    else
+      KVStore.Storage.Engine.range(start_key, end_key)
+    end
   end
 
   @doc """
   Batch put multiple key-value pairs.
   """
   def batch_put(kv_pairs) do
-    KVStore.Storage.Engine.batch_put(kv_pairs)
+    if KVStore.Config.cluster_config()[:enabled] do
+      KVStore.Storage.ReplicatedEngine.batch_put(kv_pairs)
+    else
+      KVStore.Storage.Engine.batch_put(kv_pairs)
+    end
   end
 
   @doc """
   Get storage engine status.
   """
   def status do
-    %{
-      storage: KVStore.Storage.Engine.status(),
-      compactor: KVStore.Storage.Compactor.status()
-    }
+    if KVStore.Config.cluster_config()[:enabled] do
+      KVStore.Storage.ReplicatedEngine.status()
+    else
+      %{
+        storage: KVStore.Storage.Engine.status(),
+        compactor: KVStore.Storage.Compactor.status()
+      }
+    end
+  end
+
+  @doc """
+  Get cluster status.
+  """
+  def cluster_status do
+    if KVStore.Config.cluster_config()[:enabled] do
+      KVStore.Cluster.Manager.cluster_status()
+    else
+      %{enabled: false}
+    end
+  end
+
+  @doc """
+  Get the current leader.
+  """
+  def get_leader do
+    if KVStore.Config.cluster_config()[:enabled] do
+      KVStore.Cluster.Manager.get_leader()
+    else
+      nil
+    end
   end
 end

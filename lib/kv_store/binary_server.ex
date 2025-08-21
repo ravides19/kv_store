@@ -109,7 +109,7 @@ defmodule KVStore.BinaryServer do
   defp handle_operation(1, payload) do
     # GET operation
     case decode_string(payload) do
-      {:ok, key} ->
+      {:ok, key, _rest} ->
         case KVStore.get(key) do
           {:ok, value} ->
             response = encode_get_response(key, value)
@@ -131,7 +131,7 @@ defmodule KVStore.BinaryServer do
   defp handle_operation(2, payload) do
     # PUT operation
     case decode_kv_pair(payload) do
-      {:ok, {key, value}} ->
+      {:ok, {key, value}, _rest} ->
         case KVStore.put(key, value) do
           {:ok, offset} ->
             response = encode_put_response(key, offset)
@@ -149,7 +149,7 @@ defmodule KVStore.BinaryServer do
   defp handle_operation(3, payload) do
     # DELETE operation
     case decode_string(payload) do
-      {:ok, key} ->
+      {:ok, key, _rest} ->
         case KVStore.delete(key) do
           {:ok, offset} ->
             response = encode_delete_response(key, offset)
@@ -281,8 +281,8 @@ defmodule KVStore.BinaryServer do
     case decode_string(payload) do
       {:ok, key, rest} ->
         case decode_string(rest) do
-          {:ok, value, _} ->
-            {:ok, {key, value}}
+          {:ok, value, remaining} ->
+            {:ok, {key, value}, remaining}
 
           _ ->
             {:error, :invalid_value}

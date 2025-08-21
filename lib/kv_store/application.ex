@@ -10,6 +10,8 @@ defmodule KVStore.Application do
     children = [
       # Storage engine supervisor - main component for the KV store
       KVStore.Storage.Supervisor,
+      # Cluster manager for distributed operations
+      {KVStore.Cluster.Manager, []},
       # HTTP server for network access
       {KVStore.Server, []},
       # Binary server for high-performance access

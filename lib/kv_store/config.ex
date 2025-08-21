@@ -19,9 +19,16 @@ defmodule KVStore.Config do
   @default_merge_trigger_ratio 0.3
   @default_merge_throttle_ms 10
 
-  # Network configuration (for future phases)
+  # Network configuration
   @default_port 8080
   @default_host "127.0.0.1"
+
+  # Cluster configuration
+  @default_cluster_enabled false
+  @default_node_id "node1"
+  @default_cluster_nodes ["node1", "node2", "node3"]
+  @default_raft_election_timeout_ms 150
+  @default_raft_heartbeat_interval_ms 50
 
   @doc """
   Get storage configuration.
@@ -111,6 +118,49 @@ defmodule KVStore.Config do
     get_env("KV_HOST", @default_host)
   end
 
+  @doc """
+  Get cluster configuration.
+  """
+  def cluster_config do
+    [
+      enabled: get_env_bool("KV_CLUSTER_ENABLED", @default_cluster_enabled),
+      node_id: get_env("KV_NODE_ID", @default_node_id),
+      cluster_nodes: get_env_list("KV_CLUSTER_NODES", @default_cluster_nodes),
+      election_timeout_ms:
+        get_env_int("KV_RAFT_ELECTION_TIMEOUT_MS", @default_raft_election_timeout_ms),
+      heartbeat_interval_ms:
+        get_env_int("KV_RAFT_HEARTBEAT_INTERVAL_MS", @default_raft_heartbeat_interval_ms)
+    ]
+  end
+
+  @doc """
+  Get node ID.
+  """
+  def node_id do
+    get_env("KV_NODE_ID", @default_node_id)
+  end
+
+  @doc """
+  Get cluster nodes.
+  """
+  def cluster_nodes do
+    get_env_list("KV_CLUSTER_NODES", @default_cluster_nodes)
+  end
+
+  @doc """
+  Get Raft election timeout.
+  """
+  def raft_election_timeout_ms do
+    get_env_int("KV_RAFT_ELECTION_TIMEOUT_MS", @default_raft_election_timeout_ms)
+  end
+
+  @doc """
+  Get Raft heartbeat interval.
+  """
+  def raft_heartbeat_interval_ms do
+    get_env_int("KV_RAFT_HEARTBEAT_INTERVAL_MS", @default_raft_heartbeat_interval_ms)
+  end
+
   # Private helper functions
 
   defp get_env(key, default) do
@@ -166,6 +216,13 @@ defmodule KVStore.Config do
         catch
           :error, :badarg -> default
         end
+    end
+  end
+
+  defp get_env_list(key, default) do
+    case System.get_env(key) do
+      nil -> default
+      value -> String.split(value, ",")
     end
   end
 end

@@ -107,6 +107,7 @@ KVStore.Application
         ├── KVStore.Storage.Compactor (GenServer)
         ├── KVStore.Storage.Durability (GenServer)
         └── KVStore.Storage.Cache (GenServer)
+    ├── KVStore.Cluster.Manager (Cluster Coordination)
     ├── KVStore.Server (HTTP API)
     └── KVStore.BinaryServer (Binary Protocol)
 ```
@@ -169,6 +170,13 @@ export KV_COMPRESSION_ALGORITHM="lz4"        # Compression: lz4, gzip, none (def
 export KV_COMPRESSION_LEVEL="6"              # Compression level 1-9 (default: 6)
 export KV_PORT="8080"                        # Network port (default: 8080)
 export KV_HOST="127.0.0.1"                   # Network host (default: 127.0.0.1)
+
+# Cluster configuration
+export KV_CLUSTER_ENABLED="false"            # Enable clustering (default: false)
+export KV_NODE_ID="node1"                    # This node's ID (default: node1)
+export KV_CLUSTER_NODES="node1,node2,node3"  # Cluster nodes (default: node1,node2,node3)
+export KV_RAFT_ELECTION_TIMEOUT_MS="150"     # Raft election timeout (default: 150ms)
+export KV_RAFT_HEARTBEAT_INTERVAL_MS="50"    # Raft heartbeat interval (default: 50ms)
 ```
 
 ### API Usage (Fully Functional)
@@ -196,6 +204,10 @@ KVStore.status()
 KVStore.Storage.Cache.put("key", "value")
 {:ok, "value"} = KVStore.Storage.Cache.get("key")
 KVStore.Storage.Cache.delete("key")
+
+# Cluster operations (when clustering is enabled)
+KVStore.cluster_status()                    # Get cluster status
+KVStore.get_leader()                        # Get current leader
 KVStore.Storage.Cache.stats()
 
 # Atomic operations with durability guarantees
@@ -286,6 +298,60 @@ client = KVStore.Client.new(protocol: :http)
 # ... etc
 ```
 
+## 🏗️ Cluster Usage
+
+### Single Node (Default)
+
+```elixir
+# Clustering is disabled by default
+KVStore.start()
+
+# All operations work locally
+{:ok, _} = KVStore.put("key", "value")
+{:ok, "value"} = KVStore.get("key")
+```
+
+### Multi-Node Cluster
+
+```elixir
+# Enable clustering via environment variables
+System.put_env("KV_CLUSTER_ENABLED", "true")
+System.put_env("KV_NODE_ID", "node1")
+System.put_env("KV_CLUSTER_NODES", "node1,node2,node3")
+
+# Start the application
+KVStore.start()
+
+# Operations are automatically replicated
+{:ok, :replicated} = KVStore.put("key", "value")
+{:ok, "value"} = KVStore.get("key")
+
+# Check cluster status
+status = KVStore.cluster_status()
+leader = KVStore.get_leader()
+```
+
+### Cluster-Aware Client
+
+```elixir
+# Create cluster client
+client = KVStore.ClusterClient.new(
+  nodes: ["node1:8080", "node2:8080", "node3:8080"],
+  protocol: :http,
+  timeout_ms: 5000,
+  retry_attempts: 3
+)
+
+# Operations with automatic failover
+{:ok, _} = KVStore.ClusterClient.put(client, "key", "value")
+{:ok, "value"} = KVStore.ClusterClient.get(client, "key")
+{:ok, _} = KVStore.ClusterClient.delete(client, "key")
+
+# Get cluster information
+{:ok, status} = KVStore.ClusterClient.cluster_status(client)
+{:ok, leader} = KVStore.ClusterClient.get_leader(client)
+```
+
 
 ## 📋 Next Steps (Phase 6: Multi-Node Replication)
 
@@ -308,6 +374,10 @@ kv_store/
 │   ├── server.ex              # HTTP/JSON API server
 │   ├── binary_server.ex       # Binary protocol server
 │   ├── client.ex              # Client library
+│   ├── cluster_client.ex      # Cluster-aware client
+│   ├── cluster/
+│   │   ├── raft.ex            # Raft consensus algorithm
+│   │   └── manager.ex         # Cluster coordination
 │   └── storage/
 │       ├── supervisor.ex       # Storage supervision tree
 │       ├── engine.ex          # Main storage engine
@@ -318,11 +388,23 @@ kv_store/
 │       ├── durability.ex     # Durability manager
 │       ├── cache.ex          # Read-ahead LRU cache
 │       ├── compression.ex    # Segment compression
+│       └── replicated_engine.ex # Cluster-aware storage
 │       ├── record.ex         # On-disk record format
 │       ├── segment.ex        # Segment management
 │       └── hint.ex          # Hint file operations
 ├── rel/kv                     # Release script
 ├── test/                      # Tests
+│   ├── kv_store/
+│   │   ├── storage_test.exs   # Storage engine tests
+│   │   ├── server_test.exs    # HTTP server tests
+│   │   ├── binary_server_test.exs # Binary server tests
+│   │   ├── client_test.exs    # Client library tests
+│   │   ├── cluster/
+│   │   │   ├── raft_test.exs  # Raft consensus tests
+│   │   │   └── manager_test.exs # Cluster manager tests
+│   │   └── storage/
+│   │       └── replicated_engine_test.exs # Replicated storage tests
+│   └── integration_test.exs   # Integration tests
 └── mix.exs                    # Project configuration
 
 ```
@@ -340,6 +422,9 @@ mix test test/kv_store/storage/performance_test.exs
 mix test test/kv_store/server_test.exs
 mix test test/kv_store/binary_server_test.exs
 mix test test/kv_store/client_test.exs
+mix test test/kv_store/cluster/raft_test.exs
+mix test test/kv_store/cluster/manager_test.exs
+mix test test/kv_store/storage/replicated_engine_test.exs
 
 # Run tests excluding integration tests
 mix test --exclude integration
@@ -390,9 +475,17 @@ mix test --exclude integration
 - **Connection Management**: Proper error handling and recovery
 - **Concurrent Access**: Support for multiple simultaneous clients
 
-### **7. Production Readiness**
+### **7. Multi-Node Replication**
+- **Raft consensus algorithm** for leader election and log replication
+- **Automatic failover** when nodes become unavailable
+- **Cluster coordination** with centralized management
+- **Replicated storage engine** with consistency guarantees
+- **Cluster-aware client** with automatic failover and load balancing
+- **Configurable cluster settings** via environment variables
+
+### **8. Production Readiness**
 - **Comprehensive error handling** throughout
-- **Extensive test coverage** (19+ test files)
+- **Extensive test coverage** (22+ test files)
 - **Configurable via environment variables**
 - **Detailed logging and monitoring**
 - **Graceful degradation** and fallback mechanisms
@@ -425,15 +518,20 @@ From our testing:
 
 ## 🚧 Current Limitations
 
-1. **Single-node only** (no replication yet)
-2. **No authentication/authorization**
-3. **Limited client libraries** (Elixir only)
+1. **No authentication/authorization**
+2. **Limited client libraries** (Elixir only)
+3. **Basic cluster membership management** (static configuration)
 
 ## 🎯 Roadmap
 
-### **Phase 6: Multi-Node Replication** (Next)
-1. Replicate data to multiple nodes
-2. Handle automatic failover to the other nodes
+### **Phase 6: Multi-Node Replication** (COMPLETED) ✅
+1. ✅ Replicate data to multiple nodes
+2. ✅ Handle automatic failover to the other nodes
+3. ✅ Raft consensus algorithm implementation
+4. ✅ Cluster management and coordination
+5. ✅ Replicated storage engine
+6. ✅ Cluster-aware client with failover
+7. ✅ Comprehensive test coverage
 
 ## References
 
