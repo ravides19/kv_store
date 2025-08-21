@@ -66,6 +66,13 @@ defmodule KVStore.Storage.Engine do
     GenServer.call(__MODULE__, :status)
   end
 
+  @doc """
+  Get storage engine state for internal use (e.g., by compactor).
+  """
+  def get_state do
+    GenServer.call(__MODULE__, :get_state)
+  end
+
   # Server callbacks
 
   @impl true
@@ -83,8 +90,8 @@ defmodule KVStore.Storage.Engine do
     key_set =
       :ets.new(:key_set, [:ordered_set, :public, read_concurrency: true, write_concurrency: true])
 
-    # Load existing data from hint files and segments
-    {keydir, key_set} = load_existing_data(data_dir, keydir, key_set)
+    # Perform crash recovery and load existing data
+    {keydir, key_set} = perform_crash_recovery_and_load_data(data_dir, keydir, key_set)
 
     # Find the next segment ID
     active_segment_id = find_next_segment_id(data_dir)
@@ -264,6 +271,11 @@ defmodule KVStore.Storage.Engine do
   end
 
   @impl true
+  def handle_call(:get_state, _from, state) do
+    {:reply, state, state}
+  end
+
+  @impl true
   def terminate(_reason, state) do
     # Create hint file for the active segment before shutting down
     create_hint_for_segment(state)
@@ -272,6 +284,56 @@ defmodule KVStore.Storage.Engine do
   end
 
   # Private functions
+
+  defp perform_crash_recovery_and_load_data(data_dir, keydir, key_set) do
+    case KVStore.Storage.Recovery.recover(data_dir) do
+      {:ok, recovery_info, recovery_data} ->
+        Logger.info("Crash recovery completed successfully")
+        Logger.info("Recovery stats: #{inspect(recovery_info)}")
+
+        # Transfer data from recovery tables to engine tables
+        transfer_recovery_data(recovery_data, keydir, key_set)
+
+        # Clean up recovery tables
+        :ets.delete(recovery_data.keydir)
+        :ets.delete(recovery_data.key_set)
+
+        {keydir, key_set}
+
+      {:error, reason} ->
+        Logger.error("Crash recovery failed: #{inspect(reason)}")
+        Logger.info("Falling back to regular data loading")
+
+        # Fall back to the original loading method
+        load_existing_data(data_dir, keydir, key_set)
+    end
+  end
+
+  defp transfer_recovery_data(recovery_data, target_keydir, target_key_set) do
+    # Transfer keydir entries
+    :ets.foldl(
+      fn entry, _acc ->
+        :ets.insert(target_keydir, entry)
+        nil
+      end,
+      nil,
+      recovery_data.keydir
+    )
+
+    # Transfer key_set entries
+    :ets.foldl(
+      fn entry, _acc ->
+        :ets.insert(target_key_set, entry)
+        nil
+      end,
+      nil,
+      recovery_data.key_set
+    )
+
+    Logger.info(
+      "Transferred #{:ets.info(target_keydir, :size)} keydir entries and #{:ets.info(target_key_set, :size)} key_set entries"
+    )
+  end
 
   defp maybe_rotate_segment(state) do
     case KVStore.Storage.Segment.get_size(state.active_file) do

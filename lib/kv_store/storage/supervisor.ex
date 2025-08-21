@@ -22,7 +22,9 @@ defmodule KVStore.Storage.Supervisor do
       # File handle cache
       {KVStore.Storage.FileCache, KVStore.Config.file_cache_config()},
       # Background compactor
-      {KVStore.Storage.Compactor, KVStore.Config.compactor_config()}
+      {KVStore.Storage.Compactor, KVStore.Config.compactor_config()},
+      # Durability manager
+      {KVStore.Storage.Durability, KVStore.Config.durability_config()}
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

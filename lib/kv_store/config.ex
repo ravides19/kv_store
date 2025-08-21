@@ -54,6 +54,18 @@ defmodule KVStore.Config do
   end
 
   @doc """
+  Get durability configuration.
+  """
+  def durability_config do
+    [
+      data_dir: get_env("KV_DATA_DIR", @default_data_dir),
+      checkpoint_ops: get_env_int("KV_CHECKPOINT_OPS", 1000),
+      checkpoint_interval_ms: get_env_int("KV_CHECKPOINT_INTERVAL_MS", 60_000),
+      sync_policy: get_env_atom("KV_WAL_SYNC_POLICY", :sync_on_write)
+    ]
+  end
+
+  @doc """
   Get network configuration.
   """
   def network_config do
@@ -104,6 +116,20 @@ defmodule KVStore.Config do
       "true" -> true
       "false" -> false
       _ -> default
+    end
+  end
+
+  defp get_env_atom(key, default) do
+    case System.get_env(key) do
+      nil ->
+        default
+
+      value ->
+        try do
+          String.to_existing_atom(value)
+        catch
+          :error, :badarg -> default
+        end
     end
   end
 end
