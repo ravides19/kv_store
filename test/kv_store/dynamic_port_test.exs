@@ -2,19 +2,34 @@ defmodule KVStore.DynamicPortTest do
   use ExUnit.Case, async: false
 
   setup do
-    # Clean up environment variables
+    # This test specifically tests port configuration logic
+    # We need to ensure clean environment variables without fresh environment setup
+
+    # Clean up environment variables for port testing
     System.delete_env("KV_CLUSTER_ENABLED")
     System.delete_env("KV_NODE_ID")
     System.delete_env("KV_CLUSTER_NODES")
     System.delete_env("KV_PORT")
     System.delete_env("KV_BINARY_PORT")
+    System.delete_env("KV_DATA_DIR")
+    System.delete_env("KV_SEGMENT_MAX_BYTES")
 
     # Clean up any existing data
     File.rm_rf("data")
+
+    on_exit(fn ->
+      # Clean up after test
+      File.rm_rf("data")
+    end)
+
     :ok
   end
 
   test "single node uses default ports when clustering is disabled" do
+    # Set explicit ports to override test mode defaults
+    System.put_env("KV_PORT", "8080")
+    System.put_env("KV_BINARY_PORT", "9090")
+
     # Clustering disabled (default)
     assert KVStore.Config.server_port() == 8080
     assert KVStore.Config.binary_server_port() == 9090
@@ -24,6 +39,8 @@ defmodule KVStore.DynamicPortTest do
     System.put_env("KV_CLUSTER_ENABLED", "true")
     System.put_env("KV_NODE_ID", "node1")
     System.put_env("KV_CLUSTER_NODES", "node1,node2,node3")
+    System.put_env("KV_PORT", "8080")
+    System.put_env("KV_BINARY_PORT", "9090")
 
     assert KVStore.Config.server_port() == 8080
     assert KVStore.Config.binary_server_port() == 9090
@@ -33,6 +50,8 @@ defmodule KVStore.DynamicPortTest do
     System.put_env("KV_CLUSTER_ENABLED", "true")
     System.put_env("KV_NODE_ID", "node2")
     System.put_env("KV_CLUSTER_NODES", "node1,node2,node3")
+    System.put_env("KV_PORT", "8080")
+    System.put_env("KV_BINARY_PORT", "9090")
 
     assert KVStore.Config.server_port() == 8081
     assert KVStore.Config.binary_server_port() == 9091
@@ -42,6 +61,8 @@ defmodule KVStore.DynamicPortTest do
     System.put_env("KV_CLUSTER_ENABLED", "true")
     System.put_env("KV_NODE_ID", "node3")
     System.put_env("KV_CLUSTER_NODES", "node1,node2,node3")
+    System.put_env("KV_PORT", "8080")
+    System.put_env("KV_BINARY_PORT", "9090")
 
     assert KVStore.Config.server_port() == 8082
     assert KVStore.Config.binary_server_port() == 9092
@@ -64,6 +85,8 @@ defmodule KVStore.DynamicPortTest do
     System.put_env("KV_CLUSTER_ENABLED", "true")
     System.put_env("KV_NODE_ID", "node2")
     System.put_env("KV_CLUSTER_NODES", "node3,node2,node1")
+    System.put_env("KV_PORT", "8080")
+    System.put_env("KV_BINARY_PORT", "9090")
 
     # node2 is at index 1 in the list ["node3", "node2", "node1"]
     # 8080 + 1
@@ -76,6 +99,8 @@ defmodule KVStore.DynamicPortTest do
     System.put_env("KV_CLUSTER_ENABLED", "true")
     System.put_env("KV_NODE_ID", "unknown_node")
     System.put_env("KV_CLUSTER_NODES", "node1,node2,node3")
+    System.put_env("KV_PORT", "8080")
+    System.put_env("KV_BINARY_PORT", "9090")
 
     assert KVStore.Config.server_port() == 8080
     assert KVStore.Config.binary_server_port() == 9090

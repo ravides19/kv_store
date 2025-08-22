@@ -2,13 +2,12 @@ defmodule KVStore.Storage.WALTest do
   use ExUnit.Case
 
   setup do
-    # Create a temporary directory for testing
-    test_dir = Path.join(System.tmp_dir!(), "kv_store_wal_test_#{:rand.uniform(1_000_000)}")
-    File.rm_rf!(test_dir)
-    File.mkdir_p!(test_dir)
+    # Set up fresh environment for each test
+    {:ok, [test_dir: test_dir, cleanup: cleanup_fn, env_vars: _env_vars]} =
+      KVStore.FreshEnvironment.setup_fresh_environment()
 
     on_exit(fn ->
-      File.rm_rf!(test_dir)
+      KVStore.FreshEnvironment.cleanup_environment(cleanup_fn)
     end)
 
     {:ok, test_dir: test_dir}
