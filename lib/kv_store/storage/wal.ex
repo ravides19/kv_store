@@ -18,8 +18,8 @@ defmodule KVStore.Storage.WAL do
   # WAL file magic number and version
   @wal_magic 0xDEADBEEF
   @wal_version 0x01
-  # magic(4) + version(1) + type(1) + timestamp(8) + size(4) + checksum(4) - 1
-  @wal_header_size 21
+  # magic(4) + version(1) + type(1) + timestamp(8) + size(4) + checksum(4)
+  @wal_header_size 22
 
   defstruct [:file, :path, :offset, :sync_policy]
 
@@ -54,13 +54,23 @@ defmodule KVStore.Storage.WAL do
   Close the WAL file.
   """
   def close(%__MODULE__{file: file} = wal) do
-    case :file.close(file) do
+    # Ensure all data is flushed to disk before closing
+    case :file.sync(file) do
       :ok ->
-        Logger.info("Closed WAL file: #{wal.path}")
-        :ok
+        case :file.close(file) do
+          :ok ->
+            Logger.info("Closed WAL file: #{wal.path}")
+            :ok
+
+          {:error, reason} ->
+            Logger.error("Failed to close WAL file: #{inspect(reason)}")
+            {:error, reason}
+        end
 
       {:error, reason} ->
-        Logger.error("Failed to close WAL file: #{inspect(reason)}")
+        Logger.error("Failed to sync WAL file: #{inspect(reason)}")
+        # Still try to close the file
+        :file.close(file)
         {:error, reason}
     end
   end
@@ -273,6 +283,12 @@ defmodule KVStore.Storage.WAL do
                   {:error, :checksum_mismatch}
                 end
 
+              :eof ->
+                {:error, :eof}
+
+              {:error, :eof} ->
+                {:error, :eof}
+
               {:error, reason} ->
                 {:error, reason}
             end
@@ -280,6 +296,12 @@ defmodule KVStore.Storage.WAL do
           {:error, reason} ->
             {:error, reason}
         end
+
+      :eof ->
+        {:error, :eof}
+
+      {:error, :eof} ->
+        {:error, :eof}
 
       {:error, reason} ->
         {:error, reason}

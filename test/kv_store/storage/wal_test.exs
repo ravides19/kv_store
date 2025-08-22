@@ -150,11 +150,12 @@ defmodule KVStore.Storage.WALTest do
     KVStore.Storage.WAL.close(wal3)
 
     # Replay with a callback that fails on the second entry
-    call_count = :counters.new(1, [])
+    # Use a simpler approach with Agent for state
+    {:ok, counter} = Agent.start_link(fn -> 0 end)
 
     {:ok, result} =
       KVStore.Storage.WAL.replay(wal.path, fn _entry ->
-        count = :counters.add(call_count, 1, 1)
+        count = Agent.get_and_update(counter, fn state -> {state + 1, state + 1} end)
 
         if count == 2 do
           {:error, :simulated_failure}
@@ -163,7 +164,9 @@ defmodule KVStore.Storage.WALTest do
         end
       end)
 
-    # First entry succeeded
+    Agent.stop(counter)
+
+    # First entry succeeded, second entry failed
     assert result.entries == 1
     # Second entry failed
     assert result.errors == 1
@@ -175,18 +178,31 @@ defmodule KVStore.Storage.WALTest do
     {:ok, _updated_wal} = KVStore.Storage.WAL.write_put(wal_sync, "key", "value", 1)
     KVStore.Storage.WAL.close(wal_sync)
 
-    # Test no_sync policy
+    # Test no_sync policy - create a separate WAL file
     wal_path_no_sync = Path.join(test_dir, "wal_no_sync.log")
-    File.rm_rf(wal_path_no_sync)
 
-    {:ok, wal_no_sync} = KVStore.Storage.WAL.open(test_dir, :no_sync)
-    wal_no_sync = %{wal_no_sync | path: wal_path_no_sync}
-    {:ok, _updated_wal} = KVStore.Storage.WAL.write_put(wal_no_sync, "key", "value", 1)
-    KVStore.Storage.WAL.close(wal_no_sync)
+    # Create a custom WAL for no_sync testing
+    case :file.open(wal_path_no_sync, [:raw, :binary, :append, :read]) do
+      {:ok, file} ->
+        {:ok, offset} = :file.position(file, :eof)
 
-    # Both should have created files
-    assert File.exists?(wal_sync.path)
-    assert File.exists?(wal_path_no_sync)
+        wal_no_sync = %KVStore.Storage.WAL{
+          file: file,
+          path: wal_path_no_sync,
+          offset: offset,
+          sync_policy: :no_sync
+        }
+
+        {:ok, _updated_wal} = KVStore.Storage.WAL.write_put(wal_no_sync, "key", "value", 1)
+        KVStore.Storage.WAL.close(wal_no_sync)
+
+        # Both should have created files
+        assert File.exists?(wal_sync.path)
+        assert File.exists?(wal_path_no_sync)
+
+      {:error, reason} ->
+        flunk("Failed to create no_sync WAL file: #{inspect(reason)}")
+    end
   end
 
   test "truncate WAL", %{test_dir: test_dir} do
