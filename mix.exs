@@ -7,9 +7,16 @@ defmodule KVStore.MixProject do
       version: "0.1.0",
       elixir: "~> 1.18",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      test_paths: ["test"],
+      test_pattern: "**/*_test.exs",
+      elixirc_paths: elixirc_paths(Mix.env())
     ]
   end
+
+  # Specifies which paths to compile per environment.
+  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(_), do: ["lib"]
 
   # Run "mix help compile.app" to learn about applications.
   def application do

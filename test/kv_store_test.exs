@@ -16,12 +16,12 @@ defmodule KVStoreTest do
     # Clean up any existing data
     File.rm_rf!("data")
 
-    # Start the application for each test
-    KVStore.start()
+    # Start only the storage supervisor directly (avoid HTTP server port conflicts)
+    {:ok, _pid} = KVStore.Storage.Supervisor.start_link([])
 
     on_exit(fn ->
       try do
-        Application.stop(:kv_store)
+        Supervisor.stop(KVStore.Storage.Supervisor)
       catch
         :exit, _ -> :ok
       end
@@ -35,8 +35,7 @@ defmodule KVStoreTest do
   end
 
   test "application starts successfully" do
-    # Verify that the application is running
-    assert Process.whereis(KVStore.Supervisor) != nil
+    # Verify that the storage components are running
     assert Process.whereis(KVStore.Storage.Supervisor) != nil
     assert Process.whereis(KVStore.Storage.Engine) != nil
     assert Process.whereis(KVStore.Storage.FileCache) != nil

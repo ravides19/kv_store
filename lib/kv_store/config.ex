@@ -21,7 +21,12 @@ defmodule KVStore.Config do
 
   # Network configuration
   @default_port 8080
+  @default_binary_port 9090
   @default_host "127.0.0.1"
+
+  # Test environment ports
+  @test_port 5050
+  @test_binary_port 6060
 
   # Cluster configuration
   @default_cluster_enabled false
@@ -108,15 +113,16 @@ defmodule KVStore.Config do
   Get server port with dynamic assignment for cluster mode.
 
   When clustering is enabled and running on a single machine:
-  - node1 uses port 8080
-  - node2 uses port 8081
-  - node3 uses port 8082
+  - node1 uses port 8080 (or 5050 in test)
+  - node2 uses port 8081 (or 5051 in test)
+  - node3 uses port 8082 (or 5052 in test)
   - etc.
 
-  When clustering is disabled, uses the default port (8080).
+  When clustering is disabled, uses the default port (8080 or 5050 in test).
   """
   def server_port do
     cluster_config = cluster_config()
+    base_port = get_base_port()
 
     if cluster_config[:enabled] do
       # Get the node ID and find its position in the cluster nodes list
@@ -126,16 +132,27 @@ defmodule KVStore.Config do
       case Enum.find_index(cluster_nodes, &(&1 == node_id)) do
         nil ->
           # Node not found in cluster, use default port
-          get_env_int("KV_PORT", @default_port)
+          get_env_int("KV_PORT", base_port)
 
         index ->
-          # Calculate port based on node position: 8080 + index
-          base_port = get_env_int("KV_PORT", @default_port)
-          base_port + index
+          # Calculate port based on node position: base_port + index
+          configured_port = get_env_int("KV_PORT", base_port)
+          configured_port + index
       end
     else
       # Clustering disabled, use default port
-      get_env_int("KV_PORT", @default_port)
+      get_env_int("KV_PORT", base_port)
+    end
+  end
+
+  @doc """
+  Get the base port for the current environment.
+  """
+  defp get_base_port do
+    if Mix.env() == :test do
+      @test_port
+    else
+      @default_port
     end
   end
 
@@ -150,15 +167,16 @@ defmodule KVStore.Config do
   Get binary server port with dynamic assignment for cluster mode.
 
   When clustering is enabled and running on a single machine:
-  - node1 uses port 9090
-  - node2 uses port 9091
-  - node3 uses port 9092
+  - node1 uses port 9090 (or 6060 in test)
+  - node2 uses port 9091 (or 6061 in test)
+  - node3 uses port 9092 (or 6062 in test)
   - etc.
 
-  When clustering is disabled, uses the default port (9090).
+  When clustering is disabled, uses the default port (9090 or 6060 in test).
   """
   def binary_server_port do
     cluster_config = cluster_config()
+    base_binary_port = get_base_binary_port()
 
     if cluster_config[:enabled] do
       # Get the node ID and find its position in the cluster nodes list
@@ -168,16 +186,27 @@ defmodule KVStore.Config do
       case Enum.find_index(cluster_nodes, &(&1 == node_id)) do
         nil ->
           # Node not found in cluster, use default binary port
-          get_env_int("KV_BINARY_PORT", 9090)
+          get_env_int("KV_BINARY_PORT", base_binary_port)
 
         index ->
-          # Calculate binary port based on node position: 9090 + index
-          base_binary_port = get_env_int("KV_BINARY_PORT", 9090)
-          base_binary_port + index
+          # Calculate binary port based on node position: base_binary_port + index
+          configured_binary_port = get_env_int("KV_BINARY_PORT", base_binary_port)
+          configured_binary_port + index
       end
     else
       # Clustering disabled, use default binary port
-      get_env_int("KV_BINARY_PORT", 9090)
+      get_env_int("KV_BINARY_PORT", base_binary_port)
+    end
+  end
+
+  @doc """
+  Get the base binary port for the current environment.
+  """
+  defp get_base_binary_port do
+    if Mix.env() == :test do
+      @test_binary_port
+    else
+      @default_binary_port
     end
   end
 

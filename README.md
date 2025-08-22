@@ -194,8 +194,8 @@ export KV_CACHE_MAX_SIZE="10000"             # Max cache entries (default: 10000
 export KV_CACHE_TTL_MS="300000"              # Cache TTL in ms (default: 5min)
 export KV_COMPRESSION_ALGORITHM="lz4"        # Compression: lz4, gzip, none (default: lz4)
 export KV_COMPRESSION_LEVEL="6"              # Compression level 1-9 (default: 6)
-export KV_PORT="8080"                        # HTTP server port (default: 8080)
-export KV_BINARY_PORT="9090"                 # Binary server port (default: 9090)
+export KV_PORT="8080"                        # HTTP server port (default: 8080 in dev/prod, 5050 in test)
+export KV_BINARY_PORT="9090"                 # Binary server port (default: 9090 in dev/prod, 6060 in test)
 export KV_HOST="127.0.0.1"                   # Network host (default: 127.0.0.1)
 
 # Cluster configuration
@@ -211,14 +211,23 @@ export KV_RAFT_HEARTBEAT_INTERVAL_MS="50"    # Raft heartbeat interval (default:
 When clustering is enabled, KVStore automatically assigns different ports to each node to avoid conflicts on a single machine:
 
 **Single Node (Clustering Disabled):**
-- HTTP Server: Port 8080
-- Binary Server: Port 9090
+- **Production/Development**: HTTP Server: Port 8080, Binary Server: Port 9090
+- **Test Environment**: HTTP Server: Port 5050, Binary Server: Port 6060
 
 **Multi-Node Cluster (Clustering Enabled):**
+
+**Production/Development Environment:**
 - **node1**: HTTP Port 8080, Binary Port 9090
 - **node2**: HTTP Port 8081, Binary Port 9091  
 - **node3**: HTTP Port 8082, Binary Port 9092
 - **node4**: HTTP Port 8083, Binary Port 9093
+- etc.
+
+**Test Environment:**
+- **node1**: HTTP Port 5050, Binary Port 6060
+- **node2**: HTTP Port 5051, Binary Port 6061
+- **node3**: HTTP Port 5052, Binary Port 6062
+- **node4**: HTTP Port 5053, Binary Port 6063
 - etc.
 
 **Custom Base Ports:**
@@ -227,7 +236,7 @@ If you set `KV_PORT=9000` and `KV_BINARY_PORT=9500`, the assignment becomes:
 - **node2**: HTTP Port 9001, Binary Port 9501
 - **node3**: HTTP Port 9002, Binary Port 9502
 
-This automatic port assignment eliminates the need to manually configure different ports for each node when running a cluster on a single machine.
+This automatic port assignment eliminates the need to manually configure different ports for each node when running a cluster on a single machine. The test environment uses different default ports (5050/6060) to avoid conflicts with development/production servers.
 
 ### API Usage (Fully Functional)
 

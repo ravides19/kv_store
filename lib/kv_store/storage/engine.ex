@@ -437,12 +437,56 @@ defmodule KVStore.Storage.Engine do
             {:ok, record} ->
               {:ok, record.value}
 
+            {:error, :eof} ->
+              {:error, :not_found}
+
             {:error, reason} ->
-              {:error, reason}
+              # If we get a file access error, try to reopen the file
+              case :file.close(file) do
+                :ok ->
+                  # Remove the file from cache and try again
+                  KVStore.Storage.FileCache.close_file(segment_id)
+
+                  case KVStore.Storage.FileCache.get_file(segment_id, state.data_dir) do
+                    {:ok, new_file} ->
+                      case KVStore.Storage.Segment.read_record(new_file, offset) do
+                        {:ok, record} -> {:ok, record.value}
+                        {:error, :eof} -> {:error, :not_found}
+                        {:error, new_reason} -> {:error, new_reason}
+                      end
+
+                    {:error, _} ->
+                      {:error, reason}
+                  end
+
+                _ ->
+                  {:error, reason}
+              end
           end
 
         {:error, reason} ->
-          {:error, reason}
+          # If file cache fails, try to open the file directly
+          segment_path = KVStore.Storage.Segment.path(segment_id, state.data_dir)
+
+          case :file.open(segment_path, [:raw, :binary, :read]) do
+            {:ok, file} ->
+              case KVStore.Storage.Segment.read_record(file, offset) do
+                {:ok, record} ->
+                  :file.close(file)
+                  {:ok, record.value}
+
+                {:error, :eof} ->
+                  :file.close(file)
+                  {:error, :not_found}
+
+                {:error, read_reason} ->
+                  :file.close(file)
+                  {:error, read_reason}
+              end
+
+            {:error, _} ->
+              {:error, reason}
+          end
       end
     end
   end

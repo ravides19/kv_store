@@ -15,7 +15,7 @@ defmodule KVStore.ConfigTest do
 
   describe "server_port/0" do
     test "returns default port when clustering is disabled" do
-      assert Config.server_port() == 8080
+      assert Config.server_port() == 5050
     end
 
     test "returns default port when clustering is enabled but node not in cluster" do
@@ -23,31 +23,31 @@ defmodule KVStore.ConfigTest do
       System.put_env("KV_NODE_ID", "unknown_node")
       System.put_env("KV_CLUSTER_NODES", "node1,node2,node3")
 
-      assert Config.server_port() == 8080
+      assert Config.server_port() == 5050
     end
 
-    test "returns port 8080 for node1 in cluster" do
+    test "returns port 5050 for node1 in cluster" do
       System.put_env("KV_CLUSTER_ENABLED", "true")
       System.put_env("KV_NODE_ID", "node1")
       System.put_env("KV_CLUSTER_NODES", "node1,node2,node3")
 
-      assert Config.server_port() == 8080
+      assert Config.server_port() == 5050
     end
 
-    test "returns port 8081 for node2 in cluster" do
+    test "returns port 5051 for node2 in cluster" do
       System.put_env("KV_CLUSTER_ENABLED", "true")
       System.put_env("KV_NODE_ID", "node2")
       System.put_env("KV_CLUSTER_NODES", "node1,node2,node3")
 
-      assert Config.server_port() == 8081
+      assert Config.server_port() == 5051
     end
 
-    test "returns port 8082 for node3 in cluster" do
+    test "returns port 5052 for node3 in cluster" do
       System.put_env("KV_CLUSTER_ENABLED", "true")
       System.put_env("KV_NODE_ID", "node3")
       System.put_env("KV_CLUSTER_NODES", "node1,node2,node3")
 
-      assert Config.server_port() == 8082
+      assert Config.server_port() == 5052
     end
 
     test "respects custom base port when clustering is enabled" do
@@ -64,14 +64,14 @@ defmodule KVStore.ConfigTest do
       System.put_env("KV_NODE_ID", "node2")
       System.put_env("KV_CLUSTER_NODES", "node3,node2,node1")
 
-      # node2 is at index 1, so should get port 8081 (8080 + 1)
-      assert Config.server_port() == 8081
+      # node2 is at index 1, so should get port 5051 (5050 + 1)
+      assert Config.server_port() == 5051
     end
   end
 
   describe "binary_server_port/0" do
     test "returns default binary port when clustering is disabled" do
-      assert Config.binary_server_port() == 9090
+      assert Config.binary_server_port() == 6060
     end
 
     test "returns correct binary port for node1 in cluster" do
@@ -79,7 +79,7 @@ defmodule KVStore.ConfigTest do
       System.put_env("KV_NODE_ID", "node1")
       System.put_env("KV_CLUSTER_NODES", "node1,node2,node3")
 
-      assert Config.binary_server_port() == 9090
+      assert Config.binary_server_port() == 6060
     end
 
     test "returns correct binary port for node2 in cluster" do
@@ -87,7 +87,7 @@ defmodule KVStore.ConfigTest do
       System.put_env("KV_NODE_ID", "node2")
       System.put_env("KV_CLUSTER_NODES", "node1,node2,node3")
 
-      assert Config.binary_server_port() == 9091
+      assert Config.binary_server_port() == 6061
     end
 
     test "returns correct binary port for node3 in cluster" do
@@ -95,7 +95,7 @@ defmodule KVStore.ConfigTest do
       System.put_env("KV_NODE_ID", "node3")
       System.put_env("KV_CLUSTER_NODES", "node1,node2,node3")
 
-      assert Config.binary_server_port() == 9092
+      assert Config.binary_server_port() == 6062
     end
 
     test "respects custom binary base port when clustering is enabled" do
